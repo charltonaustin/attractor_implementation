@@ -24,3 +24,5 @@ runs/
 
 # Editors
 .DS_Store
+
+examples/
