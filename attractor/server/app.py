@@ -9,10 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from attractor.engine.runner import PipelineRunner
+from attractor.handlers.codergen import ClaudeCliBackend
 from attractor.handlers.registry import create_default_registry
 from attractor.interviewer.auto_approve import AutoApproveInterviewer
 from attractor.parser.dot_parser import parse, ParseError
@@ -28,7 +29,10 @@ _question_store = QuestionStore()
 
 
 @app.post("/pipelines", status_code=201)
-async def create_pipeline(request: Request) -> JSONResponse:
+async def create_pipeline(
+    request: Request,
+    backend: str = Query(default="simulate", pattern="^(simulate|claude)$"),
+) -> JSONResponse:
     """Submit a DOT source and start execution. Returns pipeline ID."""
     body = await request.body()
     dot_source = body.decode("utf-8")
@@ -41,8 +45,9 @@ async def create_pipeline(request: Request) -> JSONResponse:
     pipeline_id = str(uuid.uuid4())
     event_queue: asyncio.Queue[BaseEvent] = asyncio.Queue(maxsize=1000)
 
+    llm_backend = ClaudeCliBackend() if backend == "claude" else None
     interviewer = HttpInterviewer(pipeline_id, _question_store)
-    registry = create_default_registry(backend=None, interviewer=interviewer)
+    registry = create_default_registry(backend=llm_backend, interviewer=interviewer)
     runner = PipelineRunner(
         registry=registry,
         logs_root=f"runs/{pipeline_id}",
@@ -53,6 +58,7 @@ async def create_pipeline(request: Request) -> JSONResponse:
         "id": pipeline_id,
         "graph_id": graph.id,
         "status": "running",
+        "backend": backend,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "event_queue": event_queue,
         "runner": runner,
@@ -71,7 +77,7 @@ async def create_pipeline(request: Request) -> JSONResponse:
     asyncio.create_task(_run())
 
     return JSONResponse(
-        {"id": pipeline_id, "status": "running"},
+        {"id": pipeline_id, "status": "running", "backend": backend},
         status_code=201,
     )
 
@@ -86,6 +92,7 @@ async def get_pipeline(pipeline_id: str) -> JSONResponse:
         "id": p["id"],
         "graph_id": p["graph_id"],
         "status": p["status"],
+        "backend": p["backend"],
         "created_at": p["created_at"],
         "error": p.get("error", ""),
     })
