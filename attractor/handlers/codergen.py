@@ -64,7 +64,14 @@ class CodergenHandler:
     async def execute(
         self, node: Node, context: Context, graph: Graph, logs_root: str
     ) -> Outcome:
-        # 1. Build prompt
+        # 1. Build prompt, injecting prior stage responses from disk into context
+        logs_path = Path(logs_root)
+        for response_file in logs_path.glob("*/response.md"):
+            stage_id = response_file.parent.name
+            key = f"{stage_id}_response"
+            if context.get(key) is None:
+                context.set(key, response_file.read_text(encoding="utf-8"))
+
         prompt = node.prompt or node.label
         prompt = expand_variables(prompt, graph, context)
 
@@ -100,7 +107,6 @@ class CodergenHandler:
             notes=f"Stage completed: {node.id}",
             context_updates={
                 "last_stage": node.id,
-                "last_response": response_text[:200],
             },
         )
         _write_status(stage_dir, outcome)
