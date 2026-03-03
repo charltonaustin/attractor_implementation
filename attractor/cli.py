@@ -39,6 +39,25 @@ def cli() -> None:
     help="Human-in-the-loop interviewer.",
 )
 @click.option(
+    "--workdir",
+    default=None,
+    help="Working directory for the LLM backend subprocess.",
+    type=click.Path(exists=True, file_okay=False),
+)
+@click.option(
+    "--venv",
+    default=None,
+    help="Virtual environment to activate for tool commands (e.g. ~/dev/myproject/.venv).",
+    type=click.Path(exists=True, file_okay=False),
+)
+@click.option(
+    "--dangerously-skip-permissions",
+    "skip_permissions",
+    is_flag=True,
+    default=False,
+    help="Pass --dangerously-skip-permissions to the claude CLI (required for automated pipelines).",
+)
+@click.option(
     "--resume",
     is_flag=True,
     default=False,
@@ -49,6 +68,9 @@ def run_command(
     backend: str,
     logs_root: str,
     interviewer: str,
+    workdir: str | None,
+    venv: str | None,
+    skip_permissions: bool,
     resume: bool,
 ) -> None:
     """Execute a pipeline defined in DOTFILE."""
@@ -65,7 +87,8 @@ def run_command(
     llm_backend = None
     if backend == "claude":
         from attractor.handlers.codergen import ClaudeCliBackend
-        llm_backend = ClaudeCliBackend()
+        extra_args = ["--dangerously-skip-permissions"] if skip_permissions else []
+        llm_backend = ClaudeCliBackend(extra_args=extra_args, workdir=workdir)
 
     # Build interviewer
     from attractor.interviewer.auto_approve import AutoApproveInterviewer
@@ -79,7 +102,7 @@ def run_command(
     from attractor.handlers.registry import create_default_registry
     from attractor.engine.runner import PipelineRunner, PipelineError
 
-    registry = create_default_registry(backend=llm_backend, interviewer=iv)
+    registry = create_default_registry(backend=llm_backend, interviewer=iv, venv=venv)
     runner = PipelineRunner(registry=registry, logs_root=logs_root, resume=resume)
 
     # Simple event printer

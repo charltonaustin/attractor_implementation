@@ -38,18 +38,57 @@ class ConsoleInterviewer(Interviewer):
             return Answer(value=AnswerValue.NO)
 
         if question.type == QuestionType.FREEFORM:
-            response = await self._read_line("> ", timeout)
+            response = await self._read_freeform(timeout)
             if response is None:
                 if question.default:
                     return question.default
                 return Answer(value=AnswerValue.TIMEOUT)
-            return Answer(value=response.strip(), text=response.strip())
+            return Answer(value=response, text=response)
 
         return Answer(value=AnswerValue.SKIPPED)
 
     async def inform(self, message: str, stage: str = "") -> None:
         prefix = f"[{stage}] " if stage else ""
         print(f"{prefix}{message}", flush=True)
+
+    async def _read_freeform(self, timeout: float | None) -> str | None:
+        try:
+            from prompt_toolkit import PromptSession
+
+            print("(Enter for newline, Alt+Enter or Escape then Enter to submit)", flush=True)
+            session = PromptSession()
+            coro = session.prompt_async("> ", multiline=True)
+            if timeout is not None:
+                try:
+                    return await asyncio.wait_for(coro, timeout=timeout)
+                except asyncio.TimeoutError:
+                    return None
+            return await coro
+        except ImportError:
+            return await self._read_multiline_fallback(timeout)
+
+    async def _read_multiline_fallback(self, timeout: float | None) -> str | None:
+        print("(Enter a blank line to submit)", flush=True)
+        lines = []
+        loop = asyncio.get_event_loop()
+        while True:
+            print("> ", end="", flush=True)
+            try:
+                if timeout is not None:
+                    line = await asyncio.wait_for(
+                        loop.run_in_executor(None, sys.stdin.readline),
+                        timeout=timeout,
+                    )
+                else:
+                    line = await loop.run_in_executor(None, sys.stdin.readline)
+            except asyncio.TimeoutError:
+                print()
+                return "\n".join(lines) if lines else None
+            line = line.rstrip("\n")
+            if not line:
+                break
+            lines.append(line)
+        return "\n".join(lines) if lines else None
 
     async def _read_line(self, prompt: str, timeout: float | None) -> str | None:
         print(prompt, end="", flush=True)

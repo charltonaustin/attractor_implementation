@@ -22,8 +22,9 @@ class CodergenBackend:
 class ClaudeCliBackend(CodergenBackend):
     """Spawns the `claude` CLI in --print mode."""
 
-    def __init__(self, extra_args: list[str] | None = None) -> None:
+    def __init__(self, extra_args: list[str] | None = None, workdir: str | None = None) -> None:
         self.extra_args = extra_args or []
+        self.workdir = workdir
 
     async def run(self, node: Node, prompt: str, context: Context) -> str:
         cmd = ["claude", "--print"] + self.extra_args
@@ -33,6 +34,7 @@ class ClaudeCliBackend(CodergenBackend):
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                cwd=self.workdir,
             )
             stdout, stderr = await proc.communicate(prompt.encode())
             if proc.returncode != 0:

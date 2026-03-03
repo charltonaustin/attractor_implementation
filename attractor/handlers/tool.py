@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 
 from attractor.model.context import Context
@@ -26,6 +27,19 @@ def _parse_timeout_seconds(timeout_str: str) -> float | None:
 
 
 class ToolHandler:
+    def __init__(self, venv: str | None = None) -> None:
+        self.venv = venv
+
+    def _build_env(self) -> dict | None:
+        if not self.venv:
+            return None
+        venv_bin = str(Path(self.venv).expanduser().resolve() / "bin")
+        env = os.environ.copy()
+        env["PATH"] = f"{venv_bin}{os.pathsep}{env.get('PATH', '')}"
+        env["VIRTUAL_ENV"] = str(Path(self.venv).expanduser().resolve())
+        env.pop("PYTHONHOME", None)
+        return env
+
     async def execute(
         self, node: Node, context: Context, graph: Graph, logs_root: str
     ) -> Outcome:
@@ -46,6 +60,7 @@ class ToolHandler:
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=self._build_env(),
             )
             try:
                 stdout, stderr = await asyncio.wait_for(
