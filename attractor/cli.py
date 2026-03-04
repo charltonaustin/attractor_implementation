@@ -23,45 +23,60 @@ def cli() -> None:
     type=click.Choice(["simulate", "claude"]),
     default="simulate",
     show_default=True,
-    help="LLM backend to use.",
+    help=(
+        "LLM backend to use. 'simulate' runs a no-op backend useful for testing "
+        "pipelines without calling an LLM. 'claude' invokes the claude CLI for each stage."
+    ),
 )
 @click.option(
     "--logs-root",
     default="runs",
     show_default=True,
-    help="Directory to store run logs and checkpoints.",
+    help="Directory where run logs and checkpoints are stored.",
 )
 @click.option(
     "--interviewer",
     type=click.Choice(["auto", "console"]),
     default="console",
     show_default=True,
-    help="Human-in-the-loop interviewer.",
+    help=(
+        "How human-in-the-loop approval is handled. 'console' prompts interactively. "
+        "'auto' approves all steps automatically."
+    ),
 )
 @click.option(
     "--workdir",
     default=None,
-    help="Working directory for the LLM backend subprocess.",
     type=click.Path(exists=True, file_okay=False),
+    help=(
+        "Working directory passed to the LLM backend subprocess. "
+        "Useful when the pipeline needs to operate on a specific project directory."
+    ),
 )
 @click.option(
     "--venv",
     default=None,
-    help="Virtual environment to activate for tool commands (e.g. ~/dev/myproject/.venv).",
     type=click.Path(exists=True, file_okay=False),
+    help=(
+        "Path to a virtual environment to activate when running tool commands "
+        "(e.g. ~/dev/myproject/.venv)."
+    ),
 )
 @click.option(
     "--dangerously-skip-permissions",
     "skip_permissions",
     is_flag=True,
     default=False,
-    help="Pass --dangerously-skip-permissions to the claude CLI (required for automated pipelines).",
+    help=(
+        "Pass --dangerously-skip-permissions to the claude CLI. "
+        "Required for fully automated pipelines where interactive permission prompts would block execution."
+    ),
 )
 @click.option(
     "--resume",
     is_flag=True,
     default=False,
-    help="Resume from last checkpoint.",
+    help="Resume from the last saved checkpoint instead of starting from the beginning.",
 )
 def run_command(
     dotfile: str,
