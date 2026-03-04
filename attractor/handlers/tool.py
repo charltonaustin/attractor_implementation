@@ -27,8 +27,9 @@ def _parse_timeout_seconds(timeout_str: str) -> float | None:
 
 
 class ToolHandler:
-    def __init__(self, venv: str | None = None) -> None:
+    def __init__(self, venv: str | None = None, workdir: str | None = None) -> None:
         self.venv = venv
+        self.workdir = workdir
 
     def _build_env(self) -> dict | None:
         if not self.venv:
@@ -61,6 +62,7 @@ class ToolHandler:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=self._build_env(),
+                cwd=self.workdir,
             )
             try:
                 stdout, stderr = await asyncio.wait_for(
@@ -79,6 +81,9 @@ class ToolHandler:
             (stage_dir / "stdout.txt").write_text(stdout_text, encoding="utf-8")
             if stderr_text:
                 (stage_dir / "stderr.txt").write_text(stderr_text, encoding="utf-8")
+
+            response_text = stdout_text + (f"\n{stderr_text}" if stderr_text else "")
+            (stage_dir / "response.md").write_text(response_text, encoding="utf-8")
 
             if proc.returncode != 0:
                 return Outcome(

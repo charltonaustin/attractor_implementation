@@ -48,6 +48,7 @@ class HandlerRegistry:
         interviewer: Any = None,
         runner: Any = None,
         venv: Any = None,
+        workdir: Any = None,
     ) -> "HandlerRegistry":
         """Populate the registry with all built-in handlers."""
         from attractor.handlers.start import StartHandler
@@ -73,7 +74,7 @@ class HandlerRegistry:
         self.register("wait.human", WaitForHumanHandler(interviewer=interviewer))
         self.register("parallel", parallel_handler)
         self.register("parallel.fan_in", FanInHandler())
-        self.register("tool", ToolHandler(venv=venv))
+        self.register("tool", ToolHandler(venv=venv, workdir=workdir))
         self.register("stack.manager_loop", ManagerLoopHandler())
         self.set_default(CodergenHandler(backend=backend))
 
