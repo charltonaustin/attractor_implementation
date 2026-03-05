@@ -8,6 +8,12 @@ import click
 
 from attractor.parser.dot_parser import parse_file, ParseError
 from attractor.validation.validator import validate, DiagnosticLevel
+from attractor.handlers.codergen import ClaudeCliBackend
+from attractor.backends.coding_agent.backend import CodingAgentBackend
+from attractor.handlers.registry import create_default_registry
+from attractor.engine.runner import PipelineRunner, PipelineError
+from attractor.interviewer.auto_approve import AutoApproveInterviewer
+from attractor.interviewer.console import ConsoleInterviewer
 
 
 @click.group()
@@ -20,12 +26,12 @@ def cli() -> None:
 @click.argument("dotfile", type=click.Path(exists=True))
 @click.option(
     "--backend",
-    type=click.Choice(["simulate", "claude"]),
+    type=click.Choice(["simulate", "claude", "coding-agent"]),
     default="simulate",
     show_default=True,
     help=(
-        "LLM backend to use. 'simulate' runs a no-op backend useful for testing "
-        "pipelines without calling an LLM. 'claude' invokes the claude CLI for each stage."
+            "LLM backend to use. 'simulate' runs a no-op backend useful for testing "
+            "pipelines without calling an LLM. 'claude' invokes the claude CLI for each stage."
     ),
 )
 @click.option(
@@ -40,8 +46,8 @@ def cli() -> None:
     default="console",
     show_default=True,
     help=(
-        "How human-in-the-loop approval is handled. 'console' prompts interactively. "
-        "'auto' approves all steps automatically."
+            "How human-in-the-loop approval is handled. 'console' prompts interactively. "
+            "'auto' approves all steps automatically."
     ),
 )
 @click.option(
@@ -49,8 +55,8 @@ def cli() -> None:
     default=None,
     type=click.Path(exists=True, file_okay=False),
     help=(
-        "Working directory passed to the LLM backend subprocess. "
-        "Useful when the pipeline needs to operate on a specific project directory."
+            "Working directory passed to the LLM backend subprocess. "
+            "Useful when the pipeline needs to operate on a specific project directory."
     ),
 )
 @click.option(
@@ -58,8 +64,8 @@ def cli() -> None:
     default=None,
     type=click.Path(exists=True, file_okay=False),
     help=(
-        "Path to a virtual environment to activate when running tool commands "
-        "(e.g. ~/dev/myproject/.venv)."
+            "Path to a virtual environment to activate when running tool commands "
+            "(e.g. ~/dev/myproject/.venv)."
     ),
 )
 @click.option(
@@ -68,8 +74,8 @@ def cli() -> None:
     is_flag=True,
     default=False,
     help=(
-        "Pass --dangerously-skip-permissions to the claude CLI. "
-        "Required for fully automated pipelines where interactive permission prompts would block execution."
+            "Pass --dangerously-skip-permissions to the claude CLI. "
+            "Required for fully automated pipelines where interactive permission prompts would block execution."
     ),
 )
 @click.option(
@@ -79,14 +85,14 @@ def cli() -> None:
     help="Resume from the last saved checkpoint instead of starting from the beginning.",
 )
 def run_command(
-    dotfile: str,
-    backend: str,
-    logs_root: str,
-    interviewer: str,
-    workdir: str | None,
-    venv: str | None,
-    skip_permissions: bool,
-    resume: bool,
+        dotfile: str,
+        backend: str,
+        logs_root: str,
+        interviewer: str,
+        workdir: str | None,
+        venv: str | None,
+        skip_permissions: bool,
+        resume: bool,
 ) -> None:
     """Execute a pipeline defined in DOTFILE."""
     try:
@@ -101,21 +107,15 @@ def run_command(
     # Build backend
     llm_backend = None
     if backend == "claude":
-        from attractor.handlers.codergen import ClaudeCliBackend
         extra_args = ["--dangerously-skip-permissions"] if skip_permissions else []
         llm_backend = ClaudeCliBackend(extra_args=extra_args, workdir=workdir)
-
-    # Build interviewer
-    from attractor.interviewer.auto_approve import AutoApproveInterviewer
-    from attractor.interviewer.console import ConsoleInterviewer
+    elif backend == "coding-agent":
+        llm_backend = CodingAgentBackend(workdir=workdir)
 
     if interviewer == "auto":
         iv = AutoApproveInterviewer()
     else:
         iv = ConsoleInterviewer()
-
-    from attractor.handlers.registry import create_default_registry
-    from attractor.engine.runner import PipelineRunner, PipelineError
 
     registry = create_default_registry(backend=llm_backend, interviewer=iv, venv=venv)
     runner = PipelineRunner(registry=registry, logs_root=logs_root, resume=resume)
@@ -153,9 +153,7 @@ def validate_command(dotfile: str, strict: bool) -> None:
         click.echo(f"Parse error: {e}", err=True)
         sys.exit(1)
 
-    from attractor.validation.validator import validate as _validate
-
-    diags = _validate(graph)
+    diags = validate(graph)
 
     if not diags:
         click.echo(f"✓ {dotfile}: No issues found")

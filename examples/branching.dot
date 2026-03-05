@@ -5,9 +5,9 @@ digraph Branch {
 
     start     [shape=Mdiamond, label="Start"]
     exit      [shape=Msquare, label="Exit"]
-    plan      [label="Plan", prompt="Plan the implementation for: $goal"]
-    implement [label="Implement", prompt="Implement the plan"]
-    validate  [label="Validate", prompt="Run tests and validate the implementation"]
+    plan      [label="Plan", prompt="Plan the implementation for: fix the fact that check_aws_login catches too broad of an exception"]
+    implement [label="Implement", prompt="Implement the plan: \n\n $plan_response "]
+    validate  [shape=parallelogram label="Validate", tool_command="bundle exec rspec"]
     gate      [shape=diamond, label="Tests passing?"]
 
     start -> plan -> implement -> validate -> gate
