@@ -27,7 +27,7 @@ class CodingAgentBackend(CodergenBackend):
 
     async def run(self, node: Node, prompt: str, context: Context) -> str:
         model = node.llm_model or self.model
-        reasoning_effort = node.reasoning_effort or self.reasoning_effort
+        reasoning_effort = node.attrs.get("reasoning_effort") or self.reasoning_effort
 
         env = LocalExecutionEnvironment(working_dir=self.workdir)
         profile = AnthropicProfile(model=model, env=env)

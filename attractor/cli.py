@@ -11,7 +11,7 @@ from attractor.validation.validator import validate, DiagnosticLevel
 from attractor.handlers.codergen import ClaudeCliBackend
 from attractor.backends.coding_agent.backend import CodingAgentBackend
 from attractor.handlers.registry import create_default_registry
-from attractor.engine.runner import PipelineRunner, PipelineError
+from attractor.engine.runner import PipelineRunner
 from attractor.interviewer.auto_approve import AutoApproveInterviewer
 from attractor.interviewer.console import ConsoleInterviewer
 

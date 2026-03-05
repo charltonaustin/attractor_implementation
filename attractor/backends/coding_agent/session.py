@@ -94,11 +94,7 @@ class Session:
                 kwargs["tool_choice"] = {"type": "auto"}
 
             if self._config.reasoning_effort:
-                # Map effort to budget tokens; skip if model doesn't support it
-                budget_map = {"low": 1024, "medium": 4096, "high": 10000}
-                budget = budget_map.get(self._config.reasoning_effort.lower())
-                if budget:
-                    kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
+                kwargs["thinking"] = {"type": "adaptive"}
 
             response = await asyncio.to_thread(
                 client.messages.create, **kwargs
