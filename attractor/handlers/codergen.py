@@ -64,20 +64,17 @@ class CodergenHandler:
     async def execute(
         self, node: Node, context: Context, graph: Graph, logs_root: str
     ) -> Outcome:
-        # 1. Build prompt, injecting prior stage responses from disk into context.
-        # Always re-read from disk so loops get fresh outputs from re-run stages.
+        # 1. Build prompt. Stage responses referenced via $<stage_id>_response are
+        # read from disk on demand by expand_variables, not stored in context.
         logs_path = Path(logs_root)
-        for response_file in logs_path.glob("*/response.md"):
-            stage_id = response_file.parent.name
-            key = f"{stage_id}_response"
-            context.set(key, response_file.read_text(encoding="utf-8"))
-
         prompt = node.prompt or node.label
-        prompt = expand_variables(prompt, graph, context)
+        prompt = expand_variables(prompt, graph, context, logs_path=logs_path)
 
-        # 2. Write prompt to logs
+        # 2. Write prompt to logs; clear stale outputs from any previous loop iteration
         stage_dir = Path(logs_root) / node.id
         stage_dir.mkdir(parents=True, exist_ok=True)
+        for stale in ("response.md", "status.json"):
+            (stage_dir / stale).unlink(missing_ok=True)
         (stage_dir / "prompt.md").write_text(prompt, encoding="utf-8")
 
         # 3. Call backend
@@ -107,7 +104,6 @@ class CodergenHandler:
             notes=f"Stage completed: {node.id}",
             context_updates={
                 "last_stage": node.id,
-                f"{node.id}_response": response_text,
             },
         )
         _write_status(stage_dir, outcome)

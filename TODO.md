@@ -1,0 +1,1 @@
+1. When using a coding agent with the cli allow for steering in between rounds
