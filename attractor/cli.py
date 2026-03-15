@@ -9,7 +9,7 @@ import click
 from attractor.parser.dot_parser import parse_file, ParseError
 from attractor.validation.validator import validate, DiagnosticLevel
 from attractor.handlers.codergen import ClaudeCliBackend
-from attractor.backends.coding_agent.backend import CodingAgentBackend
+from attractor.backends.coding_agent.backend import CodingAgentBackend, OllamaCodingAgentBackend
 from attractor.handlers.registry import create_default_registry
 from attractor.engine.runner import PipelineRunner
 from attractor.interviewer.auto_approve import AutoApproveInterviewer
@@ -26,7 +26,7 @@ def cli() -> None:
 @click.argument("dotfile", type=click.Path(exists=True))
 @click.option(
     "--backend",
-    type=click.Choice(["simulate", "claude", "coding-agent"]),
+    type=click.Choice(["simulate", "claude", "coding-agent", "ollama"]),
     default="simulate",
     show_default=True,
     help=(
@@ -49,6 +49,18 @@ def cli() -> None:
             "How human-in-the-loop approval is handled. 'console' prompts interactively. "
             "'auto' approves all steps automatically."
     ),
+)
+@click.option(
+    "--ollama-model",
+    default="deepseek-coder:33b",
+    show_default=True,
+    help="Ollama model name to use when --backend=ollama.",
+)
+@click.option(
+    "--ollama-host",
+    default="http://localhost:11434",
+    show_default=True,
+    help="Ollama server URL when --backend=ollama.",
 )
 @click.option(
     "--workdir",
@@ -89,6 +101,8 @@ def run_command(
         backend: str,
         logs_root: str,
         interviewer: str,
+        ollama_model: str,
+        ollama_host: str,
         workdir: str | None,
         venv: str | None,
         skip_permissions: bool,
@@ -111,13 +125,15 @@ def run_command(
         llm_backend = ClaudeCliBackend(extra_args=extra_args, workdir=workdir)
     elif backend == "coding-agent":
         llm_backend = CodingAgentBackend(workdir=workdir)
+    elif backend == "ollama":
+        llm_backend = OllamaCodingAgentBackend(model=ollama_model, host=ollama_host, workdir=workdir)
 
     if interviewer == "auto":
         iv = AutoApproveInterviewer()
     else:
         iv = ConsoleInterviewer()
 
-    registry = create_default_registry(backend=llm_backend, interviewer=iv, venv=venv)
+    registry = create_default_registry(backend=llm_backend, interviewer=iv, venv=venv, workdir=workdir)
     runner = PipelineRunner(registry=registry, logs_root=logs_root, resume=resume)
 
     # Simple event printer

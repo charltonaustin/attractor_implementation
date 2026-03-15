@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from attractor.backends.coding_agent.environment import LocalExecutionEnvironment
-from attractor.backends.coding_agent.profile import ProviderProfile
+from attractor.backends.coding_agent.profile import LLMResponse, ProviderProfile, ToolCallData
 
 
 @dataclass
@@ -67,11 +67,8 @@ class Session:
         return ""
 
     async def process_input(self, user_input: str) -> str:
-        import anthropic
-
         self._history.append(UserTurn(content=user_input))
 
-        client = anthropic.Anthropic()
         system_prompt = self._profile.build_system_prompt()
         tool_definitions = self._profile.tools()
         tool_round = 0
@@ -80,47 +77,22 @@ class Session:
             if self._config.max_turns > 0 and self._turn_count >= self._config.max_turns:
                 break
 
-            messages = _build_messages(self._history)
-
-            kwargs: dict[str, Any] = {
-                "model": self._profile.model,
-                "max_tokens": 8192,
-                "system": system_prompt,
-                "messages": messages,
-                "tools": tool_definitions,
-            }
-
-            if self._profile.supports_parallel_tool_calls:
-                kwargs["tool_choice"] = {"type": "auto"}
-
-            if self._config.reasoning_effort:
-                kwargs["thinking"] = {"type": "adaptive"}
-
-            response = await asyncio.to_thread(
-                client.messages.create, **kwargs
+            messages = self._profile.format_messages(self._history)
+            response: LLMResponse = await self._profile.call_api(
+                messages, system_prompt, tool_definitions, self._config
             )
 
             self._turn_count += 1
 
-            # Extract text and tool calls from response
-            text_parts: list[str] = []
-            tool_use_blocks: list[Any] = []
-            for block in response.content:
-                if block.type == "text":
-                    text_parts.append(block.text)
-                elif block.type == "tool_use":
-                    tool_use_blocks.append(block)
-
-            assistant_text = "\n".join(text_parts)
-            tool_calls = [
-                {"id": b.id, "name": b.name, "input": b.input}
-                for b in tool_use_blocks
+            tool_calls_dict = [
+                {"id": tc.id, "name": tc.name, "input": tc.input}
+                for tc in response.tool_calls
             ]
-            self._history.append(AssistantTurn(content=assistant_text, tool_calls=tool_calls))
+            self._history.append(AssistantTurn(content=response.text, tool_calls=tool_calls_dict))
 
             # Natural completion: no tool calls
-            if not tool_use_blocks or response.stop_reason == "end_turn":
-                if not tool_use_blocks:
+            if not response.tool_calls or response.stop_reason == "end_turn":
+                if not response.tool_calls:
                     break
 
             # Check tool round limit
@@ -131,7 +103,7 @@ class Session:
                 break
 
             # Execute tool calls
-            tool_results = await _execute_tools_parallel(tool_use_blocks, self._profile, self._env)
+            tool_results = await _execute_tools_parallel(response.tool_calls, self._profile, self._env)
             self._history.append(ToolResultsTurn(results=tool_results))
             tool_round += 1
 
@@ -150,22 +122,22 @@ class Session:
 
 
 async def _execute_tools_parallel(
-    tool_use_blocks: list[Any],
+    tool_calls: list[ToolCallData],
     profile: ProviderProfile,
     env: LocalExecutionEnvironment,
 ) -> list[dict]:
-    async def run_one(block: Any) -> dict:
-        tool = profile.tool_registry.get(block.name)
+    async def run_one(tc: ToolCallData) -> dict:
+        tool = profile.tool_registry.get(tc.name)
         if tool is None:
-            content = f"Error: unknown tool '{block.name}'"
+            content = f"Error: unknown tool '{tc.name}'"
         else:
             try:
-                content = await asyncio.to_thread(tool.executor, block.input, env)
+                content = await asyncio.to_thread(tool.executor, tc.input, env)
             except Exception as exc:
-                content = f"Error executing tool '{block.name}': {exc}"
-        return {"tool_use_id": block.id, "name": block.name, "content": str(content)}
+                content = f"Error executing tool '{tc.name}': {exc}"
+        return {"tool_use_id": tc.id, "name": tc.name, "content": str(content)}
 
-    return list(await asyncio.gather(*[run_one(b) for b in tool_use_blocks]))
+    return list(await asyncio.gather(*[run_one(tc) for tc in tool_calls]))
 
 
 def _build_messages(history: list[Turn]) -> list[dict]:

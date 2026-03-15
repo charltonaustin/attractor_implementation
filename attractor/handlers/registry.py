@@ -86,7 +86,8 @@ def create_default_registry(
     interviewer: Any = None,
     runner: Any = None,
     venv: Any = None,
+    workdir: Any = None,
 ) -> HandlerRegistry:
     registry = HandlerRegistry()
-    registry.build_default(backend=backend, interviewer=interviewer, runner=runner, venv=venv)
+    registry.build_default(backend=backend, interviewer=interviewer, runner=runner, venv=venv, workdir=workdir)
     return registry
